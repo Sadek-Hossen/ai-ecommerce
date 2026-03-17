@@ -1,4 +1,3 @@
-/*
 import mongoose from 'mongoose';
 
 const productSchema = new mongoose.Schema({
@@ -12,8 +11,9 @@ const productSchema = new mongoose.Schema({
     color: String,
     stock: Number
   }],
+  rating: { type: Number, default: 5 },
+  reviews: { type: Number, default: 0 },
   createdAt: { type: Date, default: Date.now }
 });
 
 export const Product = mongoose.model('Product', productSchema);
-*/
