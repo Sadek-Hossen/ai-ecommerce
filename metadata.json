@@ -1,0 +1,9 @@
+{
+  "name": "Everlane Luxe E-commerce",
+  "description": "A high-end, minimalist e-commerce platform with customer storefront and comprehensive admin dashboard.",
+  "requestFramePermissions": [
+    "camera",
+    "microphone",
+    "geolocation"
+  ]
+}
