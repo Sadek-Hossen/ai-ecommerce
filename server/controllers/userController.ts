@@ -1,11 +1,15 @@
 import { Request, Response } from 'express';
-import { User } from '../models/User.js';
+import { adminDb } from '../firebaseAdmin.js';
+
+const USERS_COLLECTION = 'users';
 
 export const getProfile = async (req: Request, res: Response) => {
   try {
-    const user = await User.findById((req as any).user.id).select('-password');
-    if (!user) return res.status(404).json({ error: 'User not found' });
-    res.json(user);
+    const doc = await adminDb.collection(USERS_COLLECTION).doc((req as any).user.id).get();
+    if (!doc.exists) return res.status(404).json({ error: 'User not found' });
+    const userData = doc.data();
+    if (userData) delete userData.password;
+    res.json({ id: doc.id, _id: doc.id, ...userData });
   } catch (error) {
     res.status(500).json({ error: 'Failed to fetch profile' });
   }
@@ -14,26 +18,29 @@ export const getProfile = async (req: Request, res: Response) => {
 export const updateProfile = async (req: Request, res: Response) => {
   try {
     const { name, email } = req.body;
-    const user = await User.findByIdAndUpdate(
-      (req as any).user.id,
-      { name, email },
-      { new: true }
-    ).select('-password');
-    res.json(user);
+    const userId = (req as any).user.id;
+    await adminDb.collection(USERS_COLLECTION).doc(userId).update({ name, email });
+    const doc = await adminDb.collection(USERS_COLLECTION).doc(userId).get();
+    const userData = doc.data();
+    if (userData) delete userData.password;
+    res.json({ id: doc.id, _id: doc.id, ...userData });
   } catch (error) {
     res.status(500).json({ error: 'Failed to update profile' });
   }
 };
 
-// Address Management
 export const addAddress = async (req: Request, res: Response) => {
   try {
-    const user = await User.findById((req as any).user.id);
-    if (!user) return res.status(404).json({ error: 'User not found' });
+    const userId = (req as any).user.id;
+    const userDoc = await adminDb.collection(USERS_COLLECTION).doc(userId).get();
+    if (!userDoc.exists) return res.status(404).json({ error: 'User not found' });
     
+    const userData = userDoc.data();
+    const addresses = userData?.addresses || [];
     const newAddress = { id: Math.random().toString(36).substr(2, 9), ...req.body };
-    user.addresses.push(newAddress);
-    await user.save();
+    addresses.push(newAddress);
+    
+    await adminDb.collection(USERS_COLLECTION).doc(userId).update({ addresses });
     res.status(201).json(newAddress);
   } catch (error) {
     res.status(500).json({ error: 'Failed to add address' });
@@ -42,27 +49,26 @@ export const addAddress = async (req: Request, res: Response) => {
 
 export const deleteAddress = async (req: Request, res: Response) => {
   try {
-    const user = await User.findById((req as any).user.id);
-    if (!user) return res.status(404).json({ error: 'User not found' });
+    const userId = (req as any).user.id;
+    const userDoc = await adminDb.collection(USERS_COLLECTION).doc(userId).get();
+    if (!userDoc.exists) return res.status(404).json({ error: 'User not found' });
     
-    (user.addresses as any) = user.addresses.filter((a: any) => a.id !== req.params.addressId);
-    await user.save();
+    const userData = userDoc.data();
+    const addresses = (userData?.addresses || []).filter((a: any) => a.id !== req.params.addressId);
+    
+    await adminDb.collection(USERS_COLLECTION).doc(userId).update({ addresses });
     res.status(204).send();
   } catch (error) {
     res.status(500).json({ error: 'Failed to delete address' });
   }
 };
 
-// Cart Management
 export const updateCart = async (req: Request, res: Response) => {
   try {
     const { cart } = req.body;
-    const user = await User.findByIdAndUpdate(
-      (req as any).user.id,
-      { cart },
-      { new: true }
-    ).select('cart');
-    res.json(user?.cart);
+    const userId = (req as any).user.id;
+    await adminDb.collection(USERS_COLLECTION).doc(userId).update({ cart });
+    res.json(cart);
   } catch (error) {
     res.status(500).json({ error: 'Failed to update cart' });
   }

@@ -5,11 +5,13 @@ import {
 } from 'recharts';
 import { 
   Package, ShoppingCart, DollarSign, Users, 
-  TrendingUp, AlertCircle, Plus, Search, Filter, LogOut, Settings, ChevronRight, Edit, Trash2
+  TrendingUp, AlertCircle, Plus, Search, Filter, LogOut, Settings, ChevronRight, Edit, Trash2, X,
+  FileText, Image as ImageIcon
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { AdminStats } from './types';
 import { useApp } from './AppContext';
+import { FileUpload } from './components/FileUpload';
 
 const data = [
   { name: 'Mon', sales: 4000, orders: 24 },
@@ -27,8 +29,11 @@ export const AdminDashboard = () => {
   const [stats, setStats] = useState<AdminStats | null>(null);
   const [products, setProducts] = useState<any[]>([]);
   const [customers, setCustomers] = useState<any[]>([]);
+  const [blogs, setBlogs] = useState<any[]>([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isBlogModalOpen, setIsBlogModalOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState<any | null>(null);
+  const [editingBlog, setEditingBlog] = useState<any | null>(null);
   const [settingsMessage, setSettingsMessage] = useState('');
   
   const [newProduct, setNewProduct] = useState({
@@ -38,6 +43,18 @@ export const AdminDashboard = () => {
     description: '',
     image: '',
     variants: [{ size: 'S', stock: 10 }]
+  });
+
+  const [newBlog, setNewBlog] = useState({
+    title: '',
+    content: '',
+    image: '',
+    video: '',
+    tags: ''
+  });
+
+  const [siteSettings, setSiteSettings] = useState({
+    logo: ''
   });
 
   const [adminSettings, setAdminSettings] = useState({
@@ -65,10 +82,26 @@ export const AdminDashboard = () => {
       .then(setCustomers);
   };
 
+  const fetchBlogs = () => {
+    fetch('/api/blogs')
+      .then(res => res.json())
+      .then(setBlogs);
+  };
+
+  const fetchSiteSettings = () => {
+    fetch('/api/settings/site_logo')
+      .then(res => res.json())
+      .then(data => {
+        if (data) setSiteSettings({ logo: data.value });
+      });
+  };
+
   useEffect(() => {
     fetchStats();
     fetchProducts();
     fetchCustomers();
+    fetchBlogs();
+    fetchSiteSettings();
   }, []);
 
   const handleAddProduct = async (e: React.FormEvent) => {
@@ -158,14 +191,77 @@ export const AdminDashboard = () => {
     }
   };
 
+  const handleAddBlog = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      const url = editingBlog ? `/api/blogs/${editingBlog._id}` : '/api/blogs';
+      const method = editingBlog ? 'PUT' : 'POST';
+      const res = await fetch(url, {
+        method,
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        },
+        body: JSON.stringify({
+          ...newBlog,
+          tags: newBlog.tags.split(',').map(t => t.trim())
+        })
+      });
+      if (res.ok) {
+        setIsBlogModalOpen(false);
+        setEditingBlog(null);
+        setNewBlog({ title: '', content: '', image: '', video: '', tags: '' });
+        fetchBlogs();
+      }
+    } catch (error) {
+      console.error('Failed to save blog:', error);
+    }
+  };
+
+  const handleDeleteBlog = async (id: string) => {
+    if (confirm('Are you sure you want to delete this blog post?')) {
+      try {
+        const res = await fetch(`/api/blogs/${id}`, { 
+          method: 'DELETE',
+          headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+        });
+        if (res.ok) fetchBlogs();
+      } catch (error) {
+        console.error('Failed to delete blog:', error);
+      }
+    }
+  };
+
+  const handleUpdateLogo = async (url: string) => {
+    try {
+      const res = await fetch('/api/settings', {
+        method: 'POST',
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        },
+        body: JSON.stringify({ key: 'site_logo', value: url })
+      });
+      if (res.ok) {
+        setSiteSettings({ logo: url });
+        setSettingsMessage('Logo updated successfully');
+        setTimeout(() => setSettingsMessage(''), 3000);
+      }
+    } catch (error) {
+      console.error('Failed to update logo:', error);
+    }
+  };
+
   if (!stats) return <div className="p-20 text-center">Loading Dashboard...</div>;
 
   const tabs = [
     { name: 'Dashboard', icon: TrendingUp },
     { name: 'Products', icon: Package },
     { name: 'Orders', icon: ShoppingCart },
+    { name: 'Blogs', icon: FileText },
     { name: 'Customers', icon: Users },
     { name: 'Settings', icon: Settings },
+    { name: 'Site Config', icon: ImageIcon },
   ];
 
   const renderContent = () => {
@@ -344,7 +440,7 @@ export const AdminDashboard = () => {
                               order.status === 'Shipped' ? 'bg-blue-100 text-blue-700' :
                               'bg-emerald-100 text-emerald-700'
                             }`}>
-                              {order.status}
+                               {order.status}
                             </span>
                           </td>
                           <td className="px-8 py-4 font-serif">${order.total}</td>
@@ -355,6 +451,65 @@ export const AdminDashboard = () => {
                   </tbody>
                 </table>
               </div>
+            </div>
+          </div>
+        );
+      case 'Blogs':
+        return (
+          <div className="space-y-8">
+            <div className="flex justify-between items-center">
+              <h2 className="text-3xl font-serif">Blogs</h2>
+              <button 
+                onClick={() => {
+                  setEditingBlog(null);
+                  setNewBlog({ title: '', content: '', image: '', video: '', tags: '' });
+                  setIsBlogModalOpen(true);
+                }}
+                className="bg-brand-900 text-white px-6 py-3 rounded-full flex items-center gap-2 hover:bg-black transition-colors"
+              >
+                <Plus size={18} /> New Post
+              </button>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {blogs.map(blog => (
+                <div key={blog._id} className="bg-white p-6 rounded-2xl luxury-shadow border border-brand-100 flex gap-4">
+                  <div className="w-24 h-24 rounded-xl overflow-hidden bg-brand-50 flex-shrink-0">
+                    {blog.video ? (
+                      <video src={blog.video} className="w-full h-full object-cover" />
+                    ) : (
+                      <img src={blog.image || 'https://picsum.photos/seed/blog/200'} className="w-full h-full object-cover" />
+                    )}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <h4 className="font-serif text-lg truncate">{blog.title}</h4>
+                    <p className="text-xs text-brand-400 mb-4">{new Date(blog.createdAt).toLocaleDateString()}</p>
+                    <div className="flex gap-2">
+                      <button 
+                        onClick={() => {
+                          setEditingBlog(blog);
+                          setNewBlog({
+                            title: blog.title,
+                            content: blog.content,
+                            image: blog.image || '',
+                            video: blog.video || '',
+                            tags: blog.tags.join(', ')
+                          });
+                          setIsBlogModalOpen(true);
+                        }}
+                        className="p-2 text-brand-400 hover:text-brand-900 transition-colors"
+                      >
+                        <Edit size={16} />
+                      </button>
+                      <button 
+                        onClick={() => handleDeleteBlog(blog._id)}
+                        className="p-2 text-brand-400 hover:text-red-600 transition-colors"
+                      >
+                        <Trash2 size={16} />
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ))}
             </div>
           </div>
         );
@@ -459,6 +614,36 @@ export const AdminDashboard = () => {
             </div>
           </div>
         );
+      case 'Site Config':
+        return (
+          <div className="space-y-8">
+            <h2 className="text-3xl font-serif">Site Configuration</h2>
+            <div className="bg-white rounded-2xl luxury-shadow border border-brand-100 p-8 space-y-8">
+              {settingsMessage && (
+                <div className="p-4 bg-emerald-50 text-emerald-700 rounded-xl text-sm">
+                  {settingsMessage}
+                </div>
+              )}
+              <div className="max-w-md">
+                <FileUpload 
+                  label="Site Logo"
+                  currentValue={siteSettings.logo}
+                  onUploadSuccess={handleUpdateLogo}
+                />
+                {siteSettings.logo && (
+                  <div className="mt-4 pt-4 border-t border-brand-100">
+                    <button 
+                      onClick={() => handleUpdateLogo('')}
+                      className="text-xs text-red-600 font-bold uppercase tracking-widest hover:underline"
+                    >
+                      Remove Logo
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        );
       default:
         return null;
     }
@@ -532,7 +717,7 @@ export const AdminDashboard = () => {
             <div className="p-8 border-b border-brand-100 flex justify-between items-center">
               <h3 className="text-2xl font-serif">{editingProduct ? 'Edit Product' : 'New Product'}</h3>
               <button onClick={() => setIsModalOpen(false)} className="text-brand-400 hover:text-brand-900">
-                <AlertCircle size={24} />
+                <X size={24} />
               </button>
             </div>
             <form onSubmit={handleAddProduct} className="p-8 space-y-6 max-h-[70vh] overflow-y-auto">
@@ -572,17 +757,11 @@ export const AdminDashboard = () => {
                 </select>
               </div>
 
-              <div className="space-y-2">
-                <label className="text-xs uppercase font-bold tracking-widest text-brand-400">Image URL</label>
-                <input 
-                  type="url" 
-                  required
-                  value={newProduct.image}
-                  onChange={e => setNewProduct({...newProduct, image: e.target.value})}
-                  className="w-full px-4 py-3 bg-brand-50 rounded-xl focus:outline-none focus:ring-1 focus:ring-brand-900"
-                  placeholder="https://picsum.photos/..."
-                />
-              </div>
+              <FileUpload 
+                label="Product Image"
+                currentValue={newProduct.image}
+                onUploadSuccess={(url) => setNewProduct({...newProduct, image: url})}
+              />
 
               <div className="space-y-2">
                 <label className="text-xs uppercase font-bold tracking-widest text-brand-400">Description</label>
@@ -600,6 +779,76 @@ export const AdminDashboard = () => {
                   className="w-full bg-brand-900 text-white py-4 rounded-full font-medium hover:bg-black transition-colors"
                 >
                   {editingProduct ? 'Update Product' : 'Create Product'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Add/Edit Blog Modal */}
+      {isBlogModalOpen && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
+          <div className="bg-white w-full max-w-2xl rounded-2xl luxury-shadow overflow-hidden">
+            <div className="p-8 border-b border-brand-100 flex justify-between items-center">
+              <h3 className="text-2xl font-serif">{editingBlog ? 'Edit Post' : 'New Post'}</h3>
+              <button onClick={() => setIsBlogModalOpen(false)} className="text-brand-400 hover:text-brand-900">
+                <X size={24} />
+              </button>
+            </div>
+            <form onSubmit={handleAddBlog} className="p-8 space-y-6 max-h-[70vh] overflow-y-auto">
+              <div className="space-y-2">
+                <label className="text-xs uppercase font-bold tracking-widest text-brand-400">Title</label>
+                <input 
+                  type="text" 
+                  required
+                  value={newBlog.title}
+                  onChange={e => setNewBlog({...newBlog, title: e.target.value})}
+                  className="w-full px-4 py-3 bg-brand-50 rounded-xl focus:outline-none focus:ring-1 focus:ring-brand-900"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-6">
+                <FileUpload 
+                  label="Featured Image"
+                  currentValue={newBlog.image}
+                  onUploadSuccess={(url) => setNewBlog({...newBlog, image: url})}
+                />
+                <FileUpload 
+                  label="Featured Video"
+                  accept="video/*"
+                  currentValue={newBlog.video}
+                  onUploadSuccess={(url) => setNewBlog({...newBlog, video: url})}
+                />
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-xs uppercase font-bold tracking-widest text-brand-400">Tags (comma separated)</label>
+                <input 
+                  type="text" 
+                  placeholder="Style, Sustainability, News"
+                  value={newBlog.tags}
+                  onChange={e => setNewBlog({...newBlog, tags: e.target.value})}
+                  className="w-full px-4 py-3 bg-brand-50 rounded-xl focus:outline-none focus:ring-1 focus:ring-brand-900"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-xs uppercase font-bold tracking-widest text-brand-400">Content</label>
+                <textarea 
+                  required
+                  value={newBlog.content}
+                  onChange={e => setNewBlog({...newBlog, content: e.target.value})}
+                  className="w-full px-4 py-3 bg-brand-50 rounded-xl focus:outline-none focus:ring-1 focus:ring-brand-900 h-64"
+                />
+              </div>
+
+              <div className="pt-4">
+                <button 
+                  type="submit"
+                  className="w-full bg-brand-900 text-white py-4 rounded-full font-medium hover:bg-black transition-colors"
+                >
+                  {editingBlog ? 'Update Post' : 'Publish Post'}
                 </button>
               </div>
             </form>
